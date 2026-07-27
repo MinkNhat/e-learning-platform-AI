@@ -1,6 +1,6 @@
 FROM python:3.11-slim-bookworm
 
-# Patch OS-level CVEs, then install system deps required by torch and native packages
+# Patch OS-level CVEs, then install system dependencies for native packages.
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     gcc g++ libgomp1 \
     && rm -rf /var/lib/apt/lists/*
@@ -9,8 +9,8 @@ WORKDIR /app
 
 # Copy requirements first so pip install is a cached layer.
 # Re-runs only when requirements.txt changes, not on every code change.
-COPY requirements-prod.txt .
-RUN pip install --no-cache-dir --prefer-binary -r requirements-prod.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefer-binary -r requirements.txt
 
 # Copy only the app package — everything else (ui/, DATA/, DOCS/) stays out
 COPY app/ ./app/

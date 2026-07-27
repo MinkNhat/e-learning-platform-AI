@@ -13,7 +13,7 @@ logfire.configure(
 )
 
 # Now safe to import app modules - logfire is already active
-from fastapi import FastAPI, Response
+from fastapi import FastAPI
 from app.agents.graph import rag_agent
 from app.guardrails import initialize_rails, guard
 
@@ -38,23 +38,6 @@ class QueryRequest(BaseModel):
 @app.get("/")
 def home():
     return {"message": "Enterprise LangGraph RAG API is live."}
-
-
-@app.get("/graph")
-def get_graph_image():
-    """
-    Returns the Mermaid image of the agent's workflow.
-    """
-    try:
-        png_bytes = rag_agent.get_graph().draw_mermaid_png()
-        return Response(content=png_bytes, media_type="image/png")
-    except Exception as error:
-        logfire.exception(
-            "[ERROR][API] Graph image generation failed",
-            error=str(error),
-            error_type=type(error).__name__,
-        )
-        return {"error": f"Could not generate graph image: {error}"}
 
 
 @app.post("/query")

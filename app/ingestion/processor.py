@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 import uuid
@@ -17,9 +16,6 @@ from app.services.retrieval.embedding import embed_texts, get_embedding_dim
 
 logfire.configure(service_name="enterprise-ingestion-service")
 
-# Local folder where parsed + chunked JSON metadata is saved (replaces GCS processed bucket)
-PROCESSED_DATA_DIR = "processed_data"
-
 # Initialize Qdrant Client
 qdrant_client = QdrantClient(
     url=settings.QDRANT_URL,
@@ -27,18 +23,8 @@ qdrant_client = QdrantClient(
 )
 
 
-def save_processed_locally(data: dict, source_type: str, filename: str) -> str:
-    """Save parsed chunk metadata as JSON in processed_data/<source_type>/."""
-    folder = os.path.join(PROCESSED_DATA_DIR, source_type)
-    os.makedirs(folder, exist_ok=True)
-    dest = os.path.join(folder, f"{filename}.json")
-    with open(dest, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    return dest
-
-
 def process_file(file_path: str, filename: str, source_type: str):
-    """Parse → chunk → save locally → embed → index in Qdrant."""
+    """Parse, chunk, embed, and index a document in Qdrant."""
     with logfire.span(
         "[Ingestion] Process file",
         file=filename,
@@ -98,15 +84,7 @@ def process_file(file_path: str, filename: str, source_type: str):
                 )
                 return
 
-            # 3. Save processed metadata locally
-            processed_data = {
-                "filename": filename,
-                "source_type": source_type,
-                "chunks": chunks,
-            }
-            local_path = save_processed_locally(processed_data, source_type, filename)
-
-            # 4. Embed and index in Qdrant
+            # 3. Embed and index in Qdrant
             with logfire.span(
                 "[Ingestion] Embed and index file",
                 file=filename,
@@ -148,7 +126,6 @@ def process_file(file_path: str, filename: str, source_type: str):
                 chunk_count=len(chunks),
                 point_count=len(points),
                 collection=settings.QDRANT_COLLECTION,
-                processed_path=local_path,
             )
 
         except Exception as error:

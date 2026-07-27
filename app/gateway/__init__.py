@@ -3,5 +3,4 @@ from app.gateway.client import (
     extract_cache_status,
     get_chat_llm,
     get_embedding_client,
-    get_native_client,
 )

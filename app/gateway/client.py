@@ -28,15 +28,6 @@ _CONFIG_IDS = {
 }
 
 
-def get_native_client(tier: LlmTier, feature: str = "rag") -> Portkey:
-    return Portkey(
-        api_key=settings.PORTKEY_API_KEY,
-        config=_CONFIG_IDS[tier],
-        metadata={"feature": feature, "_user": "rag-system"},
-        **HTTP_CLIENT_OPTIONS,
-    )
-
-
 def get_embedding_client(feature: str = "embedding") -> Portkey:
     return Portkey(
         api_key=settings.PORTKEY_API_KEY,
