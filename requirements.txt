@@ -1,0 +1,46 @@
+# --- CORE  ---
+fastapi
+uvicorn[standard]
+python-dotenv
+requests
+streamlit
+pytz
+nest-asyncio
+numba==0.61.2
+llvmlite==0.44.0
+numpy==1.26.4
+torch==2.2.2
+transformers==4.49.0
+httpx[socks]
+
+# --- VECTOR DB  ---
+qdrant-client
+flashrank
+sentence-transformers<4
+
+# --- LANGCHAIN ---
+langgraph
+langchain
+langchain-google-vertexai
+langchain-google-genai
+langchain-community
+langchain-openai
+pydantic>=2.0.0
+portkey-ai
+
+# --- DATA INGESTION ---
+unstructured
+python-pptx
+python-docx
+pypdf
+beautifulsoup4
+pdfplumber
+
+# --- OBSERVABILITY & TRACING ---
+langsmith
+logfire[fastapi,requests]
+loguru
+
+# --- GUARDRAILS ---
+nemoguardrails==0.23.0
+langchain-nvidia-ai-endpoints
