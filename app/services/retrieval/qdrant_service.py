@@ -3,6 +3,7 @@ from qdrant_client import QdrantClient
 
 from app.config import settings
 from app.services.retrieval.embedding import embed_query
+from app.services.retrieval.models import RetrievedChunk
 
 
 # Initialize Qdrant Client
@@ -12,9 +13,13 @@ client = QdrantClient(
 )
 
 
-def search_enterprise_knowledge(query: str, limit: int = 8):
+def search_learning_materials(
+    query: str,
+    limit: int = 8,
+) -> list[RetrievedChunk]:
     """
-    Performs a high-precision search in the enterprise knowledge base.
+    Perform a high-precision search across indexed learning materials.
+
     Uses the modern query_points interface.
     """
     with logfire.span(
@@ -34,17 +39,20 @@ def search_enterprise_knowledge(query: str, limit: int = 8):
                 with_payload=True,
             )
 
-            results = []
+            results: list[RetrievedChunk] = []
             for res in response.points:
+                payload = res.payload or {}
                 results.append(
                     {
-                        "content": res.payload.get("text", ""),
-                        "source": res.payload.get("source", "Unknown"),
-                        "score": res.score,
+                        "id": str(res.id),
+                        "content": payload.get("text", ""),
+                        "source": payload.get("source", "Unknown"),
+                        "vector_score": res.score,
+                        "rerank_score": None,
                     }
                 )
 
-            top_score = results[0]["score"] if results else None
+            top_score = results[0]["vector_score"] if results else None
             search_span.set_attributes(
                 {
                     "outcome": "completed",

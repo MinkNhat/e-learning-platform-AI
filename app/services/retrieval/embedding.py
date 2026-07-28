@@ -1,14 +1,17 @@
-import time
 from functools import cache
+from math import ceil
 
 import logfire
 
 from app.gateway import get_embedding_client
 
-BATCH_SIZE = 50
-MAX_ATTEMPTS = 4
-
-_embedding_dim: int | None = None
+BATCH_SIZE = 32
+BATCH_TOKEN_LIMIT = 20_000
+INPUT_TOKEN_LIMIT = 8_192
+ESTIMATED_CHARS_PER_TOKEN = 2.5
+EMBEDDING_DIM = 1024
+JINA_QUERY_TASK = "retrieval.query"
+JINA_PASSAGE_TASK = "retrieval.passage"
 
 
 @cache
@@ -20,85 +23,80 @@ def _client():
 
 
 def get_embedding_dim() -> int:
-    """Resolve the vector dimension from the Portkey embedding config."""
-    if _embedding_dim is None:
-        _embed_batch(["embedding dimension probe"])
-    if _embedding_dim is None:
-        raise RuntimeError("Portkey returned no embedding dimension.")
-    return _embedding_dim
+    """Return the configured Jina embedding dimension."""
+    return EMBEDDING_DIM
 
 
-def _is_rate_limit_error(error: Exception) -> bool:
-    if getattr(error, "status_code", None) == 429:
-        return True
-    message = str(error).lower()
-    return any(
-        marker in message
-        for marker in ("429", "rate limit", "quota", "resource_exhausted")
-    )
+def _estimate_tokens(text: str) -> int:
+    return max(1, ceil(len(text) / ESTIMATED_CHARS_PER_TOKEN))
 
 
-def _embed_batch(batch: list[str]) -> list[list[float]]:
-    global _embedding_dim
+def _build_batches(texts: list[str]) -> list[list[str]]:
+    batches: list[list[str]] = []
+    batch: list[str] = []
+    batch_tokens = 0
 
-    for attempt in range(MAX_ATTEMPTS):
-        try:
-            response = _client().embeddings.create(input=batch)
-            vectors = [item.embedding for item in response.data]
-            dimensions = {len(vector) for vector in vectors}
-            if len(dimensions) != 1:
-                raise RuntimeError("Embedding response contains inconsistent dimensions.")
-
-            dimension = dimensions.pop()
-            if _embedding_dim is None:
-                _embedding_dim = dimension
-                logfire.info(
-                    "[Embedding] Dimension resolved",
-                    dimension=dimension,
-                )
-            elif dimension != _embedding_dim:
-                raise RuntimeError(
-                    "Embedding dimension changed while the application was running: "
-                    f"expected {_embedding_dim}, received {dimension}."
-                )
-
-            logfire.info(
-                "[Embedding] Vectors created",
-                input_count=len(batch),
-                vector_count=len(vectors),
-                dimension=dimension,
-                attempt=attempt + 1,
+    for text in texts:
+        token_count = _estimate_tokens(text)
+        if token_count > INPUT_TOKEN_LIMIT:
+            raise ValueError(
+                "Embedding input exceeds the estimated Jina limit: "
+                f"{token_count} > {INPUT_TOKEN_LIMIT} tokens."
             )
-            return vectors
-        except Exception as error:
-            rate_limited = _is_rate_limit_error(error)
-            if not rate_limited or attempt == MAX_ATTEMPTS - 1:
-                logfire.exception(
-                    "[ERROR][Embedding] Request failed",
-                    error=str(error),
-                    error_type=type(error).__name__,
-                    input_count=len(batch),
-                    attempt=attempt + 1,
-                    max_attempts=MAX_ATTEMPTS,
-                    rate_limited=rate_limited,
-                    status_code=getattr(error, "status_code", None),
-                )
-                raise
 
-            wait = 2**attempt
-            logfire.warning(
-                "[WARNING][Embedding] Rate limit reached; retrying",
-                error=str(error),
-                status_code=getattr(error, "status_code", None),
-                input_count=len(batch),
-                failed_attempt=attempt + 1,
-                next_attempt=attempt + 2,
-                max_attempts=MAX_ATTEMPTS,
-                wait_seconds=wait,
+        if batch and (
+            len(batch) >= BATCH_SIZE
+            or batch_tokens + token_count > BATCH_TOKEN_LIMIT
+        ):
+            batches.append(batch)
+            batch = []
+            batch_tokens = 0
+
+        batch.append(text)
+        batch_tokens += token_count
+
+    if batch:
+        batches.append(batch)
+    return batches
+
+
+def _embed_batch(batch: list[str], task: str) -> list[list[float]]:
+    try:
+        response = _client().embeddings.create(
+            input=batch,
+            dimensions=EMBEDDING_DIM,
+            encoding_format="float",
+            task=task,
+            normalized=True,
+        )
+        results = sorted(response.data, key=lambda item: item.index)
+        vectors = [item.embedding for item in results]
+        if len(vectors) != len(batch):
+            raise RuntimeError(
+                "Embedding response count does not match input count: "
+                f"expected {len(batch)}, received {len(vectors)}."
             )
-            time.sleep(wait)
 
-    raise RuntimeError("Embedding request exhausted all retry attempts.")
+        logfire.info(
+            "[Embedding] Vectors created",
+            provider="jina",
+            task=task,
+            input_count=len(batch),
+            vector_count=len(vectors),
+            dimension=EMBEDDING_DIM,
+        )
+        return vectors
+    except Exception as error:
+        logfire.exception(
+            "[ERROR][Embedding] Request failed",
+            error=str(error),
+            error_type=type(error).__name__,
+            provider="jina",
+            task=task,
+            input_count=len(batch),
+            status_code=getattr(error, "status_code", None),
+        )
+        raise
 
 
 def embed_query(query: str) -> list[float]:
@@ -106,19 +104,24 @@ def embed_query(query: str) -> list[float]:
         "[Embedding] Embed query",
         query_length=len(query),
     ):
-        return _embed_batch([query])[0]
+        return _embed_batch(
+            _build_batches([query])[0],
+            task=JINA_QUERY_TASK,
+        )[0]
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
     all_embeddings: list[list[float]] = []
-    batch_count = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE
+    batches = _build_batches(texts)
     with logfire.span(
         "[Embedding] Embed texts",
         text_count=len(texts),
-        batch_count=batch_count,
-        batch_size=BATCH_SIZE,
+        batch_count=len(batches),
+        max_batch_size=BATCH_SIZE,
+        batch_token_limit=BATCH_TOKEN_LIMIT,
     ):
-        for start in range(0, len(texts), BATCH_SIZE):
-            batch = texts[start : start + BATCH_SIZE]
-            all_embeddings.extend(_embed_batch(batch))
+        for batch in batches:
+            all_embeddings.extend(
+                _embed_batch(batch, task=JINA_PASSAGE_TASK)
+            )
     return all_embeddings

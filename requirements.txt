@@ -17,6 +17,7 @@ langchain-openai
 portkey-ai
 
 # --- DATA INGESTION ---
+langchain-text-splitters
 unstructured
 python-pptx
 python-docx

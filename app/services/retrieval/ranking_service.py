@@ -1,6 +1,8 @@
 import logfire
 from flashrank import Ranker, RerankRequest
 
+from app.services.retrieval.models import RetrievedChunk
+
 # Lazy initialization - Ranker is loaded on first use to ensure logfire.configure() has run
 _ranker = None
 
@@ -35,7 +37,11 @@ def _get_ranker() -> Ranker:
     return _ranker
 
 
-def rerank_documents(query: str, documents: list[str], top_n: int = 5) -> list[str]:
+def rerank_documents(
+    query: str,
+    documents: list[RetrievedChunk],
+    top_n: int = 5,
+) -> list[RetrievedChunk]:
     """
     Refines retrieval results by re-scoring documents against the query semantically.
 
@@ -57,13 +63,21 @@ def rerank_documents(query: str, documents: list[str], top_n: int = 5) -> list[s
             ranker = _get_ranker()
 
             # FlashRank expects a list of dictionaries with 'id' and 'text'
-            passages = [{"id": i, "text": doc} for i, doc in enumerate(documents)]
+            passages = [
+                {"id": index, "text": document["content"]}
+                for index, document in enumerate(documents)
+            ]
 
             request = RerankRequest(query=query, passages=passages)
             results = ranker.rerank(request)
 
-            # Results are returned sorted by highest semantic score first
-            reranked_docs = [result["text"] for result in results[:top_n]]
+            # Map by passage ID so source metadata stays attached to each chunk.
+            reranked_docs: list[RetrievedChunk] = []
+            for result in results[:top_n]:
+                document = documents[int(result["id"])].copy()
+                document["rerank_score"] = float(result["score"])
+                reranked_docs.append(document)
+
             top_score = results[0]["score"] if results else None
             rerank_span.set_attributes(
                 {
