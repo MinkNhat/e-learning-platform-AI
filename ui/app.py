@@ -150,7 +150,7 @@ def normalize_markdown(markdown: str) -> str:
 
 def render_message_details(
     details_placeholder,
-    context_placeholder,
+    sources_placeholder,
     message: dict,
 ) -> None:
     """Render optional assistant metadata above the answer."""
@@ -163,11 +163,10 @@ def render_message_details(
 
     sources = message.get("sources", [])
     if sources:
-        with context_placeholder.container():
-            with st.expander("Retrieved context"):
+        with sources_placeholder.container():
+            with st.expander(f"Sources ({len(sources)})"):
                 for index, source in enumerate(sources, start=1):
-                    with st.expander(f"Chunk {index}"):
-                        st.write(source)
+                    st.write(f"{index}. {source}")
 
 
 def render_answer(placeholder, message: dict) -> None:
@@ -184,11 +183,11 @@ def render_message(message: dict) -> None:
     with st.chat_message(message["role"]):
         if message["role"] == "assistant":
             details_placeholder = st.empty()
-            context_placeholder = st.empty()
+            sources_placeholder = st.empty()
             answer_placeholder = st.empty()
             render_message_details(
                 details_placeholder,
-                context_placeholder,
+                sources_placeholder,
                 message,
             )
             render_answer(answer_placeholder, message)
@@ -209,7 +208,7 @@ def render_typewriter(placeholder, answer: str) -> None:
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.title("Agentic Assistant")
+    st.title("E-learning Assistant")
     st.markdown("---")
     st.info(f"Memory ID: {st.session_state.session_id[:8]}")
 
@@ -225,7 +224,7 @@ with st.sidebar:
         st.rerun()
 
 # --- MAIN CHAT ---
-st.title("Enterprise Agentic Assistant")
+st.title("E-learning Assistant")
 
 
 # Display history
@@ -233,7 +232,7 @@ for message in st.session_state.messages:
     render_message(message)
 
 # Chat Input
-if prompt := st.chat_input("Ask about your documentation..."):
+if prompt := st.chat_input("Ask about your learning materials..."):
     user_message = {"role": "user", "content": prompt}
     st.session_state.messages.append(user_message)
     render_message(user_message)
@@ -250,7 +249,7 @@ if prompt := st.chat_input("Ask about your documentation..."):
 
         with st.chat_message("assistant"):
             details_placeholder = st.empty()
-            context_placeholder = st.empty()
+            sources_placeholder = st.empty()
             answer_placeholder = st.empty()
             try:
                 with answer_placeholder.container():
@@ -322,7 +321,7 @@ if prompt := st.chat_input("Ask about your documentation..."):
                 st.session_state.messages.append(assistant_message)
                 render_message_details(
                     details_placeholder,
-                    context_placeholder,
+                    sources_placeholder,
                     assistant_message,
                 )
                 render_typewriter(answer_placeholder, full_answer)
