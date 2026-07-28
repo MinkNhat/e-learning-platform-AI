@@ -13,7 +13,7 @@ class Settings:
     # --- VECTOR DB (QDRANT) ---
     QDRANT_URL = _env("QDRANT_CLUSTER_ENDPOINT")
     QDRANT_API_KEY = _env("QDRANT_API_KEY")
-    QDRANT_COLLECTION = _env("QDRANT_COLLECTION", "enterprise_rag")
+    QDRANT_COLLECTION = _env("QDRANT_COLLECTION", "elearning_rag")
 
     # --- LLM GATEWAY (PORTKEY) ---
     PORTKEY_API_KEY = _env("PORTKEY_API_KEY")

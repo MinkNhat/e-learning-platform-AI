@@ -14,7 +14,7 @@ llm = get_chat_llm(
 
 def planner_node(state: AgentState):
     """
-    The Planner determines if a search is needed based on the ENTIRE conversation.
+    Determine whether the learner's request needs learning-material retrieval.
     """
     # Get the conversation history (excluding the latest message)
     history = ""
@@ -25,8 +25,8 @@ def planner_node(state: AgentState):
     user_message = state["messages"][-1]["content"] if state["messages"] else ""
 
     prompt = f"""
-    You are an intelligent Assistant Planner.
-    Analyze the conversation history and the latest user message.
+    You are the routing planner for an e-learning RAG assistant.
+    Analyze the conversation history and the learner's latest message.
 
     CONVERSATION HISTORY:
     {history}
@@ -35,8 +35,14 @@ def planner_node(state: AgentState):
     "{user_message}"
 
     Task:
-    1. If the latest message is a greeting (hi, hello) or a question that can be answered using ONLY the conversation history above (e.g., "what is my name"), respond with 'CONVERSATIONAL'.
-    2. If it is a technical question about Kubernetes, Intel, or Networking that requires fresh documentation, output a refined search query.
+    1. Output 'CONVERSATIONAL' only for greetings, casual conversation, or a
+       request that can be answered fully from the conversation history without
+       consulting learning materials.
+    2. For a question about a lesson, concept, example, exercise, assignment,
+       exam preparation, or indexed learning material, output one concise,
+       standalone retrieval query. Resolve references from the history and keep
+       important course or topic terms from the learner's wording.
+    3. Do not answer the learner and do not explain your decision.
 
     Output ONLY 'CONVERSATIONAL' or the search query.
     """
@@ -64,6 +70,6 @@ def planner_node(state: AgentState):
 
     return {
         "current_query": decision,
-        "status": f"Technical research needed. Searching for: {decision}",
-        "plan": ["Intent: Technical", f"Search Term: {decision}"],
+        "status": f"Learning material needed. Searching for: {decision}",
+        "plan": ["Intent: Learning", f"Search Term: {decision}"],
     }

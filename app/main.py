@@ -22,7 +22,7 @@ from typing import Optional
 
 
 # Initialize FastAPI
-app = FastAPI(title="Enterprise Agentic RAG API")
+app = FastAPI(title="E-learning RAG API")
 
 
 @app.on_event("startup")
@@ -37,7 +37,7 @@ class QueryRequest(BaseModel):
 
 @app.get("/")
 def home():
-    return {"message": "Enterprise LangGraph RAG API is live."}
+    return {"message": "E-learning LangGraph RAG API is live."}
 
 
 @app.post("/query")
@@ -51,7 +51,8 @@ def query(request: QueryRequest):
     initial_state = {
         "messages": [{"role": "user", "content": q}],
         "current_query": q,
-        "documents": [],
+        "retrieved_chunks": [],
+        "sources": [],
         "plan": ["Start"],
         "status": "Initializing Graph..."
     }
@@ -82,12 +83,14 @@ def query(request: QueryRequest):
             # Gate 2: LangGraph RAG pipeline
             # Run the graph synchronously to preserve Logfire context variables
             final_output = rag_agent.invoke(initial_state, config=config)
-            documents = final_output.get("documents", [])
+            retrieved_chunks = final_output.get("retrieved_chunks", [])
+            sources = final_output.get("sources", [])
 
             request_span.set_attributes(
                 {
                     "outcome": "completed",
-                    "document_count": len(documents),
+                    "document_count": len(retrieved_chunks),
+                    "source_count": len(sources),
                     "pipeline_status": final_output.get("status"),
                 }
             )
@@ -96,7 +99,7 @@ def query(request: QueryRequest):
                 "answer": final_output.get("final_answer"),
                 "thought_process": final_output.get("plan"),
                 "status": final_output.get("status"),
-                "sources": documents,
+                "sources": sources,
             }
         except Exception as error:
             request_span.set_attribute("outcome", "error")
