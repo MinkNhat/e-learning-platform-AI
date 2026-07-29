@@ -1,7 +1,7 @@
 import logfire
 
 from app.agents.state import AgentState
-from app.gateway import LlmTier, extract_cache_status, get_chat_llm
+from app.gateway import LlmTier, get_chat_llm
 from app.services.retrieval.models import RetrievedChunk
 
 
@@ -13,12 +13,7 @@ llm = get_chat_llm(
 
 
 def generate_node(state: AgentState):
-    """
-    Synthesize a response from learning materials and conversation history.
-
-    Portkey supplies response headers through the LangChain response metadata so
-    the cache status can still be surfaced in the UI.
-    """
+    """Synthesize a response from learning materials and conversation history."""
     query = state["current_query"]
 
     history_str = ""
@@ -117,27 +112,15 @@ def generate_node(state: AgentState):
     ):
         response = llm.invoke(prompt)
         content = response.content
-        cache_status = extract_cache_status(response)
-        is_cache_hit = cache_status == "HIT"
 
         logfire.info(
             "[Responder] Response generated",
             response_mode=response_mode,
             response_length=len(content),
-            cache_status=cache_status,
         )
-
-        if is_cache_hit:
-            plan_update = state["plan"] + ["Cache: Hit"]
-            status = "Cache hit — instant response."
-        else:
-            plan_update = state["plan"]
-            status = "Response generated."
 
         return {
             "final_answer": content,
-            "status": status,
-            "plan": plan_update,
             "messages": [{"role": "assistant", "content": content}],
             "sources": sources,
         }

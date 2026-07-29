@@ -11,6 +11,4 @@ class AgentState(TypedDict):
     current_query: str
     retrieved_chunks: List[RetrievedChunk]
     sources: List[str]
-    plan: List[str]
-    status: str
     final_answer: str

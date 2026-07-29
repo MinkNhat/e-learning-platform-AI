@@ -53,8 +53,6 @@ def query(request: QueryRequest):
         "current_query": q,
         "retrieved_chunks": [],
         "sources": [],
-        "plan": ["Start"],
-        "status": "Initializing Graph..."
     }
 
     # Configuration for Memory (Thread ID)
@@ -73,10 +71,7 @@ def query(request: QueryRequest):
             if rail_fired:
                 request_span.set_attribute("outcome", "blocked")
                 return {
-                    "question": q,
                     "answer": rail_response,
-                    "thought_process": ["Intent: Guardrails Fired", "Retrieval: Skipped"],
-                    "status": "Blocked by guardrails.",
                     "sources": [],
                 }
 
@@ -91,14 +86,10 @@ def query(request: QueryRequest):
                     "outcome": "completed",
                     "document_count": len(retrieved_chunks),
                     "source_count": len(sources),
-                    "pipeline_status": final_output.get("status"),
                 }
             )
             return {
-                "question": q,
                 "answer": final_output.get("final_answer"),
-                "thought_process": final_output.get("plan"),
-                "status": final_output.get("status"),
                 "sources": sources,
             }
         except Exception as error:
@@ -111,9 +102,6 @@ def query(request: QueryRequest):
                 thread_id=thread_id,
             )
             return {
-                "question": q,
                 "answer": "I apologize, but I encountered an internal error while processing your request. Please try again later.",
-                "thought_process": ["Error encountered during execution."],
-                "status": "error",
                 "sources": [],
             }

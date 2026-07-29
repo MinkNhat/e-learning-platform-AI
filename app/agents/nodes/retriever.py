@@ -34,8 +34,4 @@ def retrieve_node(state: AgentState):
             ),
         )
 
-    return {
-        "retrieved_chunks": retrieved_chunks,
-        "status": "Found relevant learning material.",
-        "plan": state["plan"] + ["Context Retrieved"],
-    }
+    return {"retrieved_chunks": retrieved_chunks}

@@ -148,19 +148,8 @@ def normalize_markdown(markdown: str) -> str:
     return "".join(normalized_lines)
 
 
-def render_message_details(
-    details_placeholder,
-    sources_placeholder,
-    message: dict,
-) -> None:
-    """Render optional assistant metadata above the answer."""
-    steps = message.get("steps", [])
-    if steps:
-        with details_placeholder.container():
-            with st.expander("Processing details"):
-                for step in steps:
-                    st.write(step)
-
+def render_message_sources(sources_placeholder, message: dict) -> None:
+    """Render optional sources above the answer."""
     sources = message.get("sources", [])
     if sources:
         with sources_placeholder.container():
@@ -182,14 +171,9 @@ def render_message(message: dict) -> None:
     """Render stored messages with the same structure on every rerun."""
     with st.chat_message(message["role"]):
         if message["role"] == "assistant":
-            details_placeholder = st.empty()
             sources_placeholder = st.empty()
             answer_placeholder = st.empty()
-            render_message_details(
-                details_placeholder,
-                sources_placeholder,
-                message,
-            )
+            render_message_sources(sources_placeholder, message)
             render_answer(answer_placeholder, message)
         else:
             st.markdown(message["content"])
@@ -248,7 +232,6 @@ if prompt := st.chat_input("Ask about your learning materials..."):
         url = f"{base_url}/query"
 
         with st.chat_message("assistant"):
-            details_placeholder = st.empty()
             sources_placeholder = st.empty()
             answer_placeholder = st.empty()
             try:
@@ -265,16 +248,11 @@ if prompt := st.chat_input("Ask about your learning materials..."):
                             }
                             response = requests.post(url, json=payload, timeout=60)
                             data = response.json()
-                            backend_status = data.get("status")
-                            backend_failed = (
-                                response.status_code >= 400
-                                or backend_status == "error"
-                            )
+                            backend_failed = response.status_code >= 400
                             backend_span.set_attributes(
                                 {
                                     "http_status_code": response.status_code,
                                     "response_size": len(response.content),
-                                    "backend_status": backend_status,
                                     "outcome": (
                                         "error" if backend_failed else "completed"
                                     ),
@@ -286,7 +264,6 @@ if prompt := st.chat_input("Ask about your learning materials..."):
                                     "[ERROR][UI] Backend returned an error",
                                     backend_url=url,
                                     http_status_code=response.status_code,
-                                    backend_status=backend_status,
                                     session_id=st.session_state.session_id,
                                 )
             except Exception as error:
@@ -307,7 +284,6 @@ if prompt := st.chat_input("Ask about your learning materials..."):
                 st.session_state.messages.append(assistant_message)
                 render_answer(answer_placeholder, assistant_message)
             else:
-                steps = data.get("thought_process") or []
                 sources = data.get("sources") or []
                 full_answer = normalize_markdown(
                     data.get("answer") or "No response."
@@ -315,15 +291,10 @@ if prompt := st.chat_input("Ask about your learning materials..."):
                 assistant_message = {
                     "role": "assistant",
                     "content": full_answer,
-                    "steps": steps,
                     "sources": sources,
                 }
                 st.session_state.messages.append(assistant_message)
-                render_message_details(
-                    details_placeholder,
-                    sources_placeholder,
-                    assistant_message,
-                )
+                render_message_sources(sources_placeholder, assistant_message)
                 render_typewriter(answer_placeholder, full_answer)
 
                 if backend_failed:
@@ -333,7 +304,6 @@ if prompt := st.chat_input("Ask about your learning materials..."):
                         "outcome": "error_response" if backend_failed else "completed",
                         "answer_length": len(full_answer),
                         "source_count": len(sources),
-                        "reasoning_step_count": len(steps),
                     }
                 )
                 logfire.info(
@@ -341,6 +311,5 @@ if prompt := st.chat_input("Ask about your learning materials..."):
                     session_id=st.session_state.session_id,
                     answer_length=len(full_answer),
                     source_count=len(sources),
-                    reasoning_step_count=len(steps),
                     message_count=len(st.session_state.messages),
                 )

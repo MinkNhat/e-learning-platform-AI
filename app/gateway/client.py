@@ -50,14 +50,5 @@ def get_chat_llm(
             config=_CONFIG_IDS[tier],
             metadata={"feature": feature, "_user": "rag-system"},
         ),
-        include_response_headers=True,
         **HTTP_CLIENT_OPTIONS,
     )
-
-
-def extract_cache_status(response) -> str:
-    headers = response.response_metadata.get("headers", {})
-    for name, value in headers.items():
-        if name.lower() == "x-portkey-cache-status":
-            return str(value).upper()
-    return "MISS"
