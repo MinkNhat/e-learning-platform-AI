@@ -1,10 +1,15 @@
+import json
+
 import logfire
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.agents.state import AgentState
 from app.gateway import LlmTier, get_chat_llm
+from app.services.retrieval.models import (
+    QueryIntent,
+    RecommendationFilters,
+)
 
-
-# Portkey-backed LLM with the standard .invoke() interface.
 llm = get_chat_llm(
     LlmTier.PRIMARY,
     feature="planner",
@@ -12,56 +17,149 @@ llm = get_chat_llm(
 )
 
 
-def planner_node(state: AgentState):
-    """
-    Determine whether the learner's request needs learning-material retrieval.
-    """
-    # Get the conversation history (excluding the latest message)
-    history = ""
-    for msg in state["messages"][:-1]:
-        role = "User" if msg["role"] == "user" else "Assistant"
-        history += f"{role}: {msg['content']}\n"
+class PlannerFilters(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
+    level: str | None = None
+    language: str | None = None
+    category: str | None = None
+    min_price: float | None = Field(default=None, ge=0)
+    max_price: float | None = Field(default=None, ge=0)
+
+    @field_validator("level", "language", "category")
+    @classmethod
+    def normalize_text_filter(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(value.split()).casefold()
+        return normalized or None
+
+
+class PlannerDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    intent: QueryIntent
+    search_query: str = ""
+    filters: PlannerFilters = Field(default_factory=PlannerFilters)
+
+    @field_validator("search_query")
+    @classmethod
+    def clean_search_query(cls, value: str) -> str:
+        return " ".join(value.split())
+
+
+def _history_text(messages: list[dict]) -> str:
+    lines = []
+    for message in messages:
+        role = "Người dùng" if message["role"] == "user" else "Trợ lý"
+        lines.append(f"{role}: {message['content']}")
+    return "\n".join(lines)
+
+
+def _parse_decision(raw_content: object) -> PlannerDecision:
+    raw_text = (
+        raw_content
+        if isinstance(raw_content, str)
+        else json.dumps(raw_content, ensure_ascii=False)
+    )
+    start = raw_text.find("{")
+    end = raw_text.rfind("}")
+    if start < 0 or end < start:
+        raise ValueError("Planner did not return a JSON object.")
+    return PlannerDecision.model_validate_json(raw_text[start : end + 1])
+
+
+def planner_node(state: AgentState):
+    """Classify the request and produce a standalone retrieval query."""
+    history = _history_text(state["messages"][:-1])
     user_message = state["messages"][-1]["content"] if state["messages"] else ""
+    scope = state.get("retrieval_scope", {})
+    has_verified_lesson_context = bool(
+        state.get("scope_verified")
+        and scope.get("allowed_course_ids")
+        and any(scope.get(key) for key in ("course_id", "module_id", "lesson_id"))
+    )
 
     prompt = f"""
-    You are the routing planner for an e-learning RAG assistant.
-    Analyze the conversation history and the learner's latest message.
+Bạn là bộ lập kế hoạch định tuyến cho trợ lý học tập trực tuyến.
 
-    CONVERSATION HISTORY:
-    {history}
+Hãy phân loại tin nhắn mới nhất của người học vào đúng một intent:
+- conversational: lời chào, hội thoại thông thường hoặc nội dung có thể trả lời
+  hoàn toàn từ lịch sử hội thoại.
+- system_qa: câu hỏi dành cho kho kiến thức chung đã lập chỉ mục, không phải yêu
+  cầu chọn khóa học và không cần truy cập nội dung bài học được bảo vệ.
+- course_recommendation: yêu cầu tìm kiếm, khám phá, so sánh hoặc gợi ý khóa học.
+- lesson_qa: câu hỏi về nội dung khóa học, module hoặc bài học, bao gồm các tham
+  chiếu như "bài này", "bài học hiện tại" hoặc "module hiện tại".
 
-    LATEST MESSAGE:
-    "{user_message}"
+Hiện có ngữ cảnh trang khóa học đã được xác thực:
+{has_verified_lesson_context}.
+Tín hiệu này chỉ dùng để hiểu tham chiếu, không tự cấp quyền truy cập. Retriever
+sẽ thực thi phân quyền ở bước sau.
 
-    Task:
-    1. Output 'CONVERSATIONAL' only for greetings, casual conversation, or a
-       request that can be answered fully from the conversation history without
-       consulting learning materials.
-    2. For a question about a lesson, concept, example, exercise, assignment,
-       exam preparation, or indexed learning material, output one concise,
-       standalone retrieval query. Resolve references from the history and keep
-       important course or topic terms from the learner's wording.
-    3. Do not answer the learner and do not explain your decision.
+Với mọi intent không phải conversational, hãy viết một search_query ngắn gọn,
+độc lập và giữ ngôn ngữ của người dùng. Dùng tiếng Việt khi ngôn ngữ chưa rõ.
+Hãy giải quyết tham chiếu dựa trên lịch sử nhưng không được tự tạo thông tin hay
+mã định danh khóa học.
 
-    Output ONLY 'CONVERSATIONAL' or the search query.
-    """
+Chỉ với course_recommendation, hãy trích xuất các bộ lọc được nêu rõ:
+level, language, category, min_price, max_price. Dùng null nếu không có.
+Chuẩn hóa level thành beginner, intermediate hoặc advanced. Chuẩn hóa tên ngôn
+ngữ về nhãn tiếng Anh như Vietnamese hoặc English. Giữ giá tiền dưới dạng số
+VND đầy đủ, ví dụ 500k thành 500000.
+
+LỊCH SỬ HỘI THOẠI:
+{history}
+
+TIN NHẮN MỚI NHẤT:
+{user_message}
+
+Chỉ trả về JSON theo đúng cấu trúc sau, không dùng Markdown:
+{{
+  "intent": "conversational|system_qa|course_recommendation|lesson_qa",
+  "search_query": "",
+  "filters": {{
+    "level": null,
+    "language": null,
+    "category": null,
+    "min_price": null,
+    "max_price": null
+  }}
+}}
+"""
 
     with logfire.span(
         "[Planner] Select route",
         message_count=len(state["messages"]),
         history_length=len(history),
         user_message_length=len(user_message),
-    ):
-        decision = llm.invoke(prompt).content.strip()
-        route = "conversational" if decision == "CONVERSATIONAL" else "retrieval"
-        logfire.info(
-            "[Planner] Route selected",
-            route=route,
-            search_query=None if route == "conversational" else decision,
+        has_verified_lesson_context=has_verified_lesson_context,
+    ) as span:
+        raw_decision = llm.invoke(prompt).content
+        decision = _parse_decision(raw_decision)
+
+        if decision.intent != QueryIntent.CONVERSATIONAL and not decision.search_query:
+            decision.search_query = user_message
+
+        planner_filters = decision.filters.model_dump(exclude_none=True)
+        request_filters = state.get(
+            "requested_recommendation_filters",
+            {},
+        )
+        merged_filters: RecommendationFilters = {
+            **planner_filters,
+            **request_filters,
+        }
+        span.set_attributes(
+            {
+                "intent": decision.intent.value,
+                "search_query": decision.search_query,
+                "filter_count": len(merged_filters),
+            }
         )
 
-    if decision == "CONVERSATIONAL":
-        return {"current_query": "CONVERSATIONAL"}
-
-    return {"current_query": decision}
+    return {
+        "intent": decision.intent,
+        "current_query": decision.search_query,
+        "recommendation_filters": merged_filters,
+    }
