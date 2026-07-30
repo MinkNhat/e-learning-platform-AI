@@ -2,11 +2,53 @@ import logfire
 from bs4 import BeautifulSoup
 
 
+def parse_html_content(content: str) -> str:
+    """Convert HTML into readable text while retaining document structure."""
+    soup = BeautifulSoup(content or "", "html.parser")
+
+    for element in soup(["script", "style", "meta", "noscript", "template"]):
+        element.decompose()
+
+    for br in soup.find_all("br"):
+        br.replace_with("\n")
+
+    for row in soup.find_all("tr"):
+        cells = [
+            cell.get_text(" ", strip=True)
+            for cell in row.find_all(["th", "td"], recursive=False)
+        ]
+        if cells:
+            row.replace_with(f"\n{' | '.join(cells)}\n")
+
+    for item in soup.find_all("li"):
+        item.insert_before("\n- ")
+        item.append("\n")
+
+    for block in soup.find_all(
+        [
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "p",
+            "blockquote",
+            "pre",
+            "section",
+            "article",
+        ]
+    ):
+        block.insert_before("\n")
+        block.append("\n")
+
+    text = soup.get_text(separator=" ")
+    lines = (" ".join(line.split()) for line in text.splitlines())
+    return "\n".join(line for line in lines if line).strip()
+
+
 def parse_html(file_path: str) -> str:
-    """
-    Parses HTML content using BeautifulSoup.
-    Cleans scripts, styles, and extracts readable text for RAG.
-    """
+    """Parse an HTML file with the same structured representation as lessons."""
     with logfire.span(
         "[Parser] Parse file",
         file=file_path,
@@ -15,19 +57,7 @@ def parse_html(file_path: str) -> str:
         with open(file_path, "r", encoding="utf-8", errors="ignore") as file:
             content = file.read()
 
-        soup = BeautifulSoup(content, "html.parser")
-
-        # 1. Remove Junk (Scripts, Styles, Metadata)
-        for script in soup(["script", "style", "meta", "noscript"]):
-            script.decompose()
-
-        # 2. Extract Text
-        text = soup.get_text(separator="\n")
-
-        # 3. Clean Whitespace (Collapse multiple newlines)
-        lines = (line.strip() for line in text.splitlines())
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        clean_text = "\n".join(chunk for chunk in chunks if chunk)
+        clean_text = parse_html_content(content)
 
         logfire.info(
             "[Parser] File parsed",
