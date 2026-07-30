@@ -5,9 +5,12 @@ from nemoguardrails.rails.llm.options import RailStatus, RailType
 from app.gateway import LlmTier, get_chat_llm
 from app.guardrails.colang_rules import (
     COLANG_CONTENT,
+    ENGLISH_REFUSAL_RESPONSE,
+    REFUSAL_RESPONSE,
     STATIC_DIALOG_RESPONSES,
     YAML_CONTENT,
 )
+from app.services.language import prefers_english_fallback
 
 
 _rails: LLMRails | None = None
@@ -82,7 +85,12 @@ def guard(message: str) -> tuple[bool, str | None]:
                 query_preview=message[:200],
                 llm_check_count=1,
             )
-            return True, input_check.content
+            refusal = (
+                ENGLISH_REFUSAL_RESPONSE
+                if prefers_english_fallback(message)
+                else REFUSAL_RESPONSE
+            )
+            return True, refusal
 
         logfire.info(
             "[Guardrails] Request passed",

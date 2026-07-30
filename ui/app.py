@@ -152,9 +152,14 @@ def render_message_sources(sources_placeholder, message: dict) -> None:
     """Render optional sources above the answer."""
     sources = message.get("sources", [])
     if sources:
-        with sources_placeholder.container():
-            with st.expander(f"Sources ({len(sources)})"):
-                for index, source in enumerate(sources, start=1):
+        with sources_placeholder.container(), st.expander(f"Nguồn ({len(sources)})"):
+            for index, source in enumerate(sources, start=1):
+                if isinstance(source, dict):
+                    label = source.get("label") or source.get("id")
+                    entity_type = source.get("entity_type")
+                    suffix = f" ({entity_type})" if entity_type else ""
+                    st.write(f"{index}. {label}{suffix}")
+                else:
                     st.write(f"{index}. {source}")
 
 
@@ -236,7 +241,7 @@ if prompt := st.chat_input("Ask about your learning materials..."):
             answer_placeholder = st.empty()
             try:
                 with answer_placeholder.container():
-                    with st.spinner("Generating answer..."):
+                    with st.spinner("Đang tạo câu trả lời..."):
                         with logfire.span(
                             "[UI] Call backend",
                             backend_url=url,
@@ -278,7 +283,7 @@ if prompt := st.chat_input("Ask about your learning materials..."):
                 )
                 assistant_message = {
                     "role": "assistant",
-                    "content": "Backend unavailable.",
+                    "content": "Không thể kết nối đến hệ thống.",
                     "error": True,
                 }
                 st.session_state.messages.append(assistant_message)
@@ -286,7 +291,7 @@ if prompt := st.chat_input("Ask about your learning materials..."):
             else:
                 sources = data.get("sources") or []
                 full_answer = normalize_markdown(
-                    data.get("answer") or "No response."
+                    data.get("answer") or "Hệ thống chưa trả về nội dung."
                 )
                 assistant_message = {
                     "role": "assistant",

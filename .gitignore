@@ -50,6 +50,7 @@ enterprise_env
 commands.md
 
 .logfire
+.cache/
 
 tenvv
 

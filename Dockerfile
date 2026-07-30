@@ -12,7 +12,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefer-binary -r requirements.txt
 
-# Copy only the app package — everything else (ui/, DATA/, DOCS/) stays out
+# Copy only the API package; UI, data, and local documentation stay out.
 COPY app/ ./app/
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
