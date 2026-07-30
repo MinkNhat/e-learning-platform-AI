@@ -18,7 +18,6 @@ class AgentState(TypedDict):
     current_query: str
     intent: QueryIntent
     retrieval_scope: RetrievalScope
-    scope_verified: bool
     requested_recommendation_filters: RecommendationFilters
     recommendation_filters: RecommendationFilters
     retrieved_chunks: list[RetrievedChunk]

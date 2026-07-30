@@ -74,9 +74,8 @@ def planner_node(state: AgentState):
     history = _history_text(state["messages"][:-1])
     user_message = state["messages"][-1]["content"] if state["messages"] else ""
     scope = state.get("retrieval_scope", {})
-    has_verified_lesson_context = bool(
-        state.get("scope_verified")
-        and scope.get("allowed_course_ids")
+    has_lesson_context = bool(
+        scope.get("allowed_course_ids")
         and any(scope.get(key) for key in ("course_id", "module_id", "lesson_id"))
     )
 
@@ -93,7 +92,7 @@ Hãy phân loại tin nhắn mới nhất của người học vào đúng một
   chiếu như "bài này", "bài học hiện tại" hoặc "module hiện tại".
 
 Hiện có ngữ cảnh trang khóa học đã được xác thực:
-{has_verified_lesson_context}.
+{has_lesson_context}.
 Tín hiệu này chỉ dùng để hiểu tham chiếu, không tự cấp quyền truy cập. Retriever
 sẽ thực thi phân quyền ở bước sau.
 
@@ -133,7 +132,7 @@ Chỉ trả về JSON theo đúng cấu trúc sau, không dùng Markdown:
         message_count=len(state["messages"]),
         history_length=len(history),
         user_message_length=len(user_message),
-        has_verified_lesson_context=has_verified_lesson_context,
+        has_lesson_context=has_lesson_context,
     ) as span:
         raw_decision = llm.invoke(prompt).content
         decision = _parse_decision(raw_decision)

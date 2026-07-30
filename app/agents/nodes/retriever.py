@@ -21,7 +21,7 @@ def _lesson_candidates(
 ) -> tuple[list[RetrievedChunk], RetrievalStatus]:
     scope = state.get("retrieval_scope", {})
     allowed_course_ids = scope.get("allowed_course_ids", [])
-    if not state.get("scope_verified") or not allowed_course_ids:
+    if not allowed_course_ids:
         return [], RetrievalStatus.SCOPE_REQUIRED
 
     course_id = scope.get("course_id")

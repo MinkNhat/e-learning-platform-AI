@@ -2,10 +2,9 @@
 fastapi
 uvicorn[standard]
 python-dotenv
-requests
-streamlit
 httpx[socks]
 pydantic>=2.0.0
+PyJWT[crypto]>=2.8,<3
 
 # --- VECTOR DB & RETRIEVAL ---
 qdrant-client

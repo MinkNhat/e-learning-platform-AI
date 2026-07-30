@@ -1,3 +1,4 @@
+import base64
 import os
 
 from dotenv import load_dotenv
@@ -13,6 +14,11 @@ def _env(name: str, default: str | None = None) -> str | None:
 def _env_int(name: str, default: int) -> int:
     value = _env(name)
     return int(value) if value is not None else default
+
+
+def _env_base64(name: str) -> str | None:
+    value = _env(name)
+    return base64.b64decode(value).decode("utf-8") if value else None
 
 
 class Settings:
@@ -38,8 +44,8 @@ class Settings:
     PORTKEY_EMBEDDING_CONFIG_ID = _env("PORTKEY_EMBEDDING_CONFIG_ID")
     PORTKEY_HTTP_PROXY = _env("PORTKEY_HTTP_PROXY")
 
-    # --- INTERNAL API ---
-    INTERNAL_SERVICE_TOKEN = _env("INTERNAL_SERVICE_TOKEN")
+    # --- RAG API AUTHENTICATION ---
+    RAG_JWT_PUBLIC_KEY = _env_base64("RAG_JWT_PUBLIC_KEY")
 
     # --- OBSERVABILITY ---
     LANGSMITH_TRACING = _env("LANGSMITH_TRACING", "true")
