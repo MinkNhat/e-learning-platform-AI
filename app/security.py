@@ -1,3 +1,5 @@
+from typing import Annotated
+
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -19,7 +21,6 @@ class RetrievalScopeClaim(BaseModel):
 class RagPrincipal(BaseModel):
     sub: str = Field(min_length=1, max_length=128)
     permission: str
-    conversation_id: str = Field(min_length=1, max_length=256)
     retrieval_scope: RetrievalScopeClaim
 
 
@@ -27,7 +28,10 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def require_rag_principal(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None,
+        Depends(bearer_scheme),
+    ],
 ) -> RagPrincipal:
     if credentials is None:
         raise HTTPException(

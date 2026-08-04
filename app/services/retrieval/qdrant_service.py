@@ -57,7 +57,6 @@ def _build_filter(
     for input_name, payload_name in (
         ("level", "level_normalized"),
         ("language", "languages_normalized"),
-        ("category", "category_keys"),
     ):
         if value := filters.get(input_name):
             must.append(_match(payload_name, " ".join(value.casefold().split())))

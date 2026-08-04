@@ -47,12 +47,6 @@ class Settings:
     # --- RAG API AUTHENTICATION ---
     RAG_JWT_PUBLIC_KEY = _env_base64("RAG_JWT_PUBLIC_KEY")
 
-    # --- OBSERVABILITY ---
-    LANGSMITH_TRACING = _env("LANGSMITH_TRACING", "true")
-    LANGSMITH_API_KEY = _env("LANGSMITH_API_KEY")
-    LANGSMITH_PROJECT = _env("LANGSMITH_PROJECT", "rag_application")
-    LANGSMITH_ENDPOINT = _env("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com")
-
 
 # Apply LangChain environment variables for automatic tracing
 os.environ["LANGCHAIN_TRACING_V2"] = os.getenv("LANGSMITH_TRACING", "true")

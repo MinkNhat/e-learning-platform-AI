@@ -1,5 +1,3 @@
-import json
-
 import logfire
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -22,11 +20,10 @@ class PlannerFilters(BaseModel):
 
     level: str | None = None
     language: str | None = None
-    category: str | None = None
     min_price: float | None = Field(default=None, ge=0)
     max_price: float | None = Field(default=None, ge=0)
 
-    @field_validator("level", "language", "category")
+    @field_validator("level", "language")
     @classmethod
     def normalize_text_filter(cls, value: str | None) -> str | None:
         if value is None:
@@ -54,19 +51,6 @@ def _history_text(messages: list[dict]) -> str:
         role = "Người dùng" if message["role"] == "user" else "Trợ lý"
         lines.append(f"{role}: {message['content']}")
     return "\n".join(lines)
-
-
-def _parse_decision(raw_content: object) -> PlannerDecision:
-    raw_text = (
-        raw_content
-        if isinstance(raw_content, str)
-        else json.dumps(raw_content, ensure_ascii=False)
-    )
-    start = raw_text.find("{")
-    end = raw_text.rfind("}")
-    if start < 0 or end < start:
-        raise ValueError("Planner did not return a JSON object.")
-    return PlannerDecision.model_validate_json(raw_text[start : end + 1])
 
 
 def planner_node(state: AgentState):
@@ -102,10 +86,11 @@ Hãy giải quyết tham chiếu dựa trên lịch sử nhưng không được 
 mã định danh khóa học.
 
 Chỉ với course_recommendation, hãy trích xuất các bộ lọc được nêu rõ:
-level, language, category, min_price, max_price. Dùng null nếu không có.
-Chuẩn hóa level thành beginner, intermediate hoặc advanced. Chuẩn hóa tên ngôn
-ngữ về nhãn tiếng Anh như Vietnamese hoặc English. Giữ giá tiền dưới dạng số
-VND đầy đủ, ví dụ 500k thành 500000.
+level, language, min_price, max_price. Dùng null nếu không có. Chủ đề hoặc công
+nghệ như Java, Python và React phải nằm trong search_query, không được chuyển
+thành bộ lọc. Chuẩn hóa level thành beginner, intermediate hoặc advanced. Chuẩn
+hóa tên ngôn ngữ về nhãn tiếng Anh như Vietnamese hoặc English. Giữ giá tiền
+dưới dạng số VND đầy đủ, ví dụ 500k thành 500000.
 
 LỊCH SỬ HỘI THOẠI:
 {history}
@@ -120,7 +105,6 @@ Chỉ trả về JSON theo đúng cấu trúc sau, không dùng Markdown:
   "filters": {{
     "level": null,
     "language": null,
-    "category": null,
     "min_price": null,
     "max_price": null
   }}
@@ -134,31 +118,25 @@ Chỉ trả về JSON theo đúng cấu trúc sau, không dùng Markdown:
         user_message_length=len(user_message),
         has_lesson_context=has_lesson_context,
     ) as span:
-        raw_decision = llm.invoke(prompt).content
-        decision = _parse_decision(raw_decision)
+        content = llm.invoke(prompt).content
+        if not isinstance(content, str):
+            raise TypeError("Planner must return JSON text.")
+        decision = PlannerDecision.model_validate_json(content)
 
         if decision.intent != QueryIntent.CONVERSATIONAL and not decision.search_query:
             decision.search_query = user_message
 
-        planner_filters = decision.filters.model_dump(exclude_none=True)
-        request_filters = state.get(
-            "requested_recommendation_filters",
-            {},
-        )
-        merged_filters: RecommendationFilters = {
-            **planner_filters,
-            **request_filters,
-        }
+        filters: RecommendationFilters = decision.filters.model_dump(exclude_none=True)
         span.set_attributes(
             {
                 "intent": decision.intent.value,
                 "search_query": decision.search_query,
-                "filter_count": len(merged_filters),
+                "filter_count": len(filters),
             }
         )
 
     return {
         "intent": decision.intent,
         "current_query": decision.search_query,
-        "recommendation_filters": merged_filters,
+        "recommendation_filters": filters,
     }

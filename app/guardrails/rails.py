@@ -10,8 +10,7 @@ from app.guardrails.colang_rules import (
     STATIC_DIALOG_RESPONSES,
     YAML_CONTENT,
 )
-from app.services.language import prefers_english_fallback
-
+from app.services.language import prefers_english
 
 _rails: LLMRails | None = None
 
@@ -53,11 +52,7 @@ def guard(message: str) -> tuple[bool, str | None]:
         (False, None)    — the message is clean; proceed to LangGraph.
     """
     if _rails is None:
-        logfire.warning(
-            "[WARNING][Guardrails] Check skipped",
-            reason="not_initialized",
-        )
-        return False, None
+        raise RuntimeError("Guardrails are not initialized.")
 
     with logfire.span(
         "[Guardrails] Check request",
@@ -87,7 +82,7 @@ def guard(message: str) -> tuple[bool, str | None]:
             )
             refusal = (
                 ENGLISH_REFUSAL_RESPONSE
-                if prefers_english_fallback(message)
+                if prefers_english(message)
                 else REFUSAL_RESPONSE
             )
             return True, refusal

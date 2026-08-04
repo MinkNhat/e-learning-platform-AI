@@ -44,7 +44,6 @@ class RetrievalScope(TypedDict, total=False):
 class RecommendationFilters(TypedDict, total=False):
     level: str
     language: str
-    category: str
     min_price: float
     max_price: float
 

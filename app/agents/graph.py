@@ -1,4 +1,3 @@
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
 from app.agents.nodes.planner import planner_node
@@ -19,9 +18,6 @@ workflow.add_node("responder", generate_node)
 
 # 3. Define the Edges & Routing Logic
 def route_planner(state: AgentState):
-    """
-    Routes the workflow based on the planner's decision.
-    """
     if state["intent"] == QueryIntent.CONVERSATIONAL:
         return "responder"
     return "retriever"
@@ -43,12 +39,4 @@ workflow.add_conditional_edges(
 
 workflow.add_edge("retriever", "responder")
 workflow.add_edge("responder", END)
-
-
-# --- MEMORY UPGRADE ---
-# MemorySaver allows the agent to remember conversations based on 'thread_id'
-checkpointer = MemorySaver()
-
-
-# 4. Compile the Graph with Memory
-rag_agent = workflow.compile(checkpointer=checkpointer)
+rag_agent = workflow.compile()

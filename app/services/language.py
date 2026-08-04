@@ -5,7 +5,7 @@ VIETNAMESE_CHARACTERS = frozenset(
 )
 
 
-def prefers_english_fallback(text: str) -> bool:
+def prefers_english(text: str) -> bool:
     """Detect clear English for deterministic messages; default to Vietnamese."""
     normalized = " ".join(text.casefold().split())
     if re.search(
