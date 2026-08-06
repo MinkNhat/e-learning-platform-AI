@@ -1,0 +1,35 @@
+# Version control and editor metadata
+.git
+.github
+.idea
+.vscode
+
+# Local environments and secrets
+.env
+.env.*
+.venv
+venv
+env
+enterprise_env
+
+# Python, test, and model caches
+**/__pycache__/
+**/*.py[cod]
+.cache
+.deepeval
+.mypy_cache
+.pytest_cache
+.ruff_cache
+
+# Local data and generated artifacts are not required by the API image
+DATA
+processed_data
+build
+dist
+*.egg-info
+*.log
+
+# OS and local documentation files
+.DS_Store
+Thumbs.db
+*.md
